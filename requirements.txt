@@ -1,0 +1,12 @@
+pandas
+numpy
+matplotlib
+mplfinance
+yfinance
+scipy
+bokeh
+seaborn
+jupyter
+ipykernel
+ta-lib
+
