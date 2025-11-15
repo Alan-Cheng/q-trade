@@ -9,4 +9,5 @@ seaborn
 jupyter
 ipykernel
 ta-lib
+statsmodels
 
