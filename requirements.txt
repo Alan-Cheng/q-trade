@@ -10,4 +10,3 @@ jupyter
 ipykernel
 ta-lib
 statsmodels
-
