@@ -4,12 +4,13 @@
 """
 
 from .parameter_space import ParameterSpace
-from .scorer import Scorer
+from .scorer import Scorer, AVAILABLE_METRICS
 from .factor_optimizer import FactorOptimizer
 
 __all__ = [
     'ParameterSpace',
     'Scorer',
     'FactorOptimizer',
+    'AVAILABLE_METRICS',
 ]
 
