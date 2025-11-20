@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 
 from ..positions.base_position import BasePositionManager
 from ..positions.fix_ratio_position import FixedRatioPositionManager
+from ..benchmark.benchmark import Benchmark
 
 # =========================================================
 # MultiStockBacktester：多股票回測引擎
@@ -68,6 +69,8 @@ class MultiStockBacktester:
         self.stock_results = {}
         self.trades = None
         self.stats = None
+        self.benchmark_stats = None  # 儲存 benchmark 統計資料
+        self.benchmark_equity = None  # 儲存 benchmark 權益曲線
         
         # 內部變數
         self.stock_signals = {}  # 每個股票的訊號
@@ -424,20 +427,31 @@ class MultiStockBacktester:
         drawdown = equity_series / roll_max - 1.0
         max_drawdown = drawdown.min()
         
+        # 計算 Benchmark 績效（多股票平均分散）
+        benchmark_result = Benchmark.compute_multi_stock_benchmark(self.stock_data, self.initial_capital)
+        self.benchmark_equity = benchmark_result['equity_curve']
+        self.benchmark_stats = benchmark_result['stats']
+        
         # 儲存統計資料
         self.stats = {
-            "總報酬率": total_return,
-            "年化報酬率": annual_return,
-            "年化波動率": volatility,
-            "Sharpe": sharpe,
-            "最大回撤": max_drawdown,
-            "最終權益": equity_series.iloc[-1],
-            "最終現金": self.cash_history.iloc[-1],
+            "策略_總報酬率": total_return,
+            "策略_年化報酬率": annual_return,
+            "策略_年化波動率": volatility,
+            "策略_Sharpe": sharpe,
+            "策略_最大回撤": max_drawdown,
+            "策略_最終權益": equity_series.iloc[-1],
+            "策略_最終現金": self.cash_history.iloc[-1],
+            "基準_總報酬率": self.benchmark_stats.get("總報酬率", np.nan),
+            "基準_年化報酬率": self.benchmark_stats.get("年化報酬率", np.nan),
+            "基準_年化波動率": self.benchmark_stats.get("年化波動率", np.nan),
+            "基準_Sharpe": self.benchmark_stats.get("Sharpe", np.nan),
+            "基準_最大回撤": self.benchmark_stats.get("最大回撤", np.nan),
         }
         
         # 儲存權益曲線
         self.stock_results['equity_curve'] = equity_series
         self.stock_results['cash_curve'] = self.cash_history
+        self.stock_results['benchmark_equity'] = self.benchmark_equity
     
     def _extract_all_trades(self):
         """提取所有交易紀錄"""
@@ -534,9 +548,16 @@ class MultiStockBacktester:
         axes[0].plot(self.equity_history.index, self.equity_history.values, 
                     label='Strategy Equity', linewidth=2)
         
+        # Plot benchmark equity if available
+        if self.benchmark_equity is not None and not self.benchmark_equity.empty:
+            # 對齊日期索引
+            benchmark_aligned = self.benchmark_equity.reindex(self.equity_history.index, method='ffill')
+            axes[0].plot(benchmark_aligned.index, benchmark_aligned.values, 
+                        label='Benchmark (Buy & Hold)', linewidth=2, linestyle='--', alpha=0.7)
+        
         # Draw a dashed line for the initial capital
         axes[0].axhline(y=self.initial_capital, color='r', linestyle='--', 
-                    label=f'Initial Capital ({self.initial_capital:,.0f})')
+                    label=f'Initial Capital ({self.initial_capital:,.0f})', alpha=0.5)
                     
         axes[0].set_title('Multi-Stock Backtest - Equity Curve', fontsize=14)
         axes[0].set_ylabel('Equity', fontsize=12) # Note: Adjust currency label as needed

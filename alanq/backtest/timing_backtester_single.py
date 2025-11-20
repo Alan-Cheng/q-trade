@@ -39,6 +39,7 @@ class Backtester:
         self.result = None
         self.trades = None
         self.stats = None
+        self.benchmark_stats = None  # 儲存 benchmark 統計資料
         # 新增：用於儲存滑價模型實例的字典 (以 factor_name 為鍵)
         self.slippage_models = {} 
         # 新增：用於記錄所有滑價因子欄位名稱的列表 (用於迭代)
@@ -247,18 +248,21 @@ class Backtester:
     def _compute_equity(self):
         df = self.df
 
-        # 基準：單純買入持有的對數報酬率
-        df["log_ret"] = Benchmark.compute_log_ret(df)
+        # 使用 Benchmark 類別計算基準績效
+        benchmark_result = Benchmark.compute_single_stock_benchmark(df, self.initial_capital)
+        df["log_ret"] = benchmark_result['log_ret']
+        df["benchmark_equity"] = benchmark_result['equity_curve']
+        
+        # 儲存 benchmark 統計資料供後續使用
+        self.benchmark_stats = benchmark_result['stats']
 
         # 策略報酬：用「前一天」的持股狀態乘上今天的 log return
         df["strategy_log_ret"] = df["position"].shift(1).fillna(0) * df["log_ret"]
 
         # 累積報酬 → 換回金額
-        df["benchmark_equity"] = self.initial_capital * np.exp(df["log_ret"].cumsum())
         df["strategy_equity"] = self.initial_capital * np.exp(df["strategy_log_ret"].cumsum())
         
         # 🔥 修正第一筆 NaN = 初始資金
-        df.loc[df.index[0], "benchmark_equity"] = self.initial_capital
         df.loc[df.index[0], "strategy_equity"] = self.initial_capital
 
         self.result = df
@@ -390,23 +394,14 @@ class Backtester:
         max_dd = dd.min()
 
         # ----------------------------
-        # 基準績效（benchmark）
+        # 基準績效（benchmark）- 使用 Benchmark 類別計算的結果
         # ----------------------------
-        benchmark_total_ret = df["benchmark_equity"].iloc[-1] / self.initial_capital
-        benchmark_annual_ret = (1 + benchmark_total_ret) ** (1 / years) - 1 if years > 0 else benchmark_total_ret
-
-        benchmark_daily_ret = df["log_ret"].dropna()
-        if len(benchmark_daily_ret) > 1 and benchmark_daily_ret.std() > 0:
-            benchmark_vol = benchmark_daily_ret.std() * np.sqrt(252)
-            benchmark_sharpe = benchmark_daily_ret.mean() / benchmark_daily_ret.std() * np.sqrt(252)
-        else:
-            benchmark_vol = np.nan
-            benchmark_sharpe = np.nan
-
-        bench_equity = df["benchmark_equity"]
-        bench_roll_max = bench_equity.cummax()
-        bench_dd = bench_equity / bench_roll_max - 1.0
-        benchmark_max_dd = bench_dd.min()
+        benchmark_stats = getattr(self, 'benchmark_stats', {})
+        benchmark_total_ret = benchmark_stats.get("總報酬率", np.nan)
+        benchmark_annual_ret = benchmark_stats.get("年化報酬率", np.nan)
+        benchmark_vol = benchmark_stats.get("年化波動率", np.nan)
+        benchmark_sharpe = benchmark_stats.get("Sharpe", np.nan)
+        benchmark_max_dd = benchmark_stats.get("最大回撤", np.nan)
 
         # ----------------------------
         # 統整最終績效（中文）
