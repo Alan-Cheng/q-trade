@@ -81,3 +81,12 @@ class StockDataManager:
                 df.columns = df.columns.droplevel(1)
         
         return df
+    
+    def get_stock_data(self):
+        return self.stock_data
+    
+    def get_stock_data_by_symbol(self, symbol: str) -> pd.DataFrame:
+        return self.stock_data.get(symbol, pd.DataFrame())
+    
+    def get_stock_data_by_symbols(self, symbols: list[str]) -> dict[str, pd.DataFrame]:
+        return {symbol: self.stock_data.get(symbol, pd.DataFrame()) for symbol in symbols}
