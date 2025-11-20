@@ -283,13 +283,46 @@ class Backtester:
 
         records = []
         for entry_date, exit_date in zip(entries, exits):
+            entry_price = df.loc[entry_date, "Close"]
+            exit_price = df.loc[exit_date, "Close"]
+            
+            # 計算可用資金（從 equity curve 變化推算，或使用 entry_date 前一天的 equity）
+            if 'strategy_equity' in df.columns:
+                # 使用 entry_date 前一天的 equity 作為可用資金
+                prev_date_idx = df.index.get_loc(entry_date) - 1
+                if prev_date_idx >= 0:
+                    available_capital = df.iloc[prev_date_idx]['strategy_equity']
+                else:
+                    available_capital = self.initial_capital
+            else:
+                # 如果沒有 equity curve，使用初始資金
+                available_capital = self.initial_capital
+            
+            # 計算股數（股票不可分割，必須是整數）
+            # 向下取整，確保不超過可用資金
+            shares = int(available_capital / entry_price) if entry_price > 0 else 0
+            
+            # 計算實際投入金額（基於整數股數）
+            actual_cost = shares * entry_price
+            
+            # 計算剩餘現金（無法買一股的剩餘資金）
+            remaining_cash = available_capital - actual_cost
+            
+            # 計算報酬率和盈虧
+            return_pct = (exit_price / entry_price) - 1 if entry_price > 0 else 0
+            pnl = (exit_price - entry_price) * shares
+            
             records.append({
                 "entry_date": entry_date,
                 "exit_date": exit_date,
-                "entry_price": df.loc[entry_date, "Close"],
-                "exit_price": df.loc[exit_date, "Close"],
+                "entry_price": entry_price,
+                "exit_price": exit_price,
+                "shares": shares,
+                "actual_cost": actual_cost,  # 實際投入金額
+                "remaining_cash": remaining_cash,  # 剩餘現金
                 "holding_days": (exit_date - entry_date).days,
-                "return_pct": df.loc[exit_date, "Close"] / df.loc[entry_date, "Close"] - 1,
+                "return_pct": return_pct,
+                "pnl": pnl,
                 "buy_factor": df.loc[entry_date, "buy_factor_trigger"],
                 "sell_factor": df.loc[exit_date, "sell_factor_trigger"],
             })
