@@ -4,10 +4,12 @@
 """
 
 from .timing_backtester import MultiStockBacktester
+from .timing_backtester_single import Backtester
 from .selection_backtester import StockPickerWorker
 
 __all__ = [
     'MultiStockBacktester',
+    'Backtester',
     'StockPickerWorker',
 ]
 
