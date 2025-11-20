@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
-from base_timing_factor import BaseBuyFactor
-from base_timing_factor import BaseSellFactor
+from .base_timing_factor import BaseBuyFactor, BaseSellFactor
 
 # =========================================================
 # 實作1. BreakoutBuyFactor：N 日向上突破買入

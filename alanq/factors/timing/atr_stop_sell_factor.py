@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from base_timing_factor import BaseSellFactor
+from .base_timing_factor import BaseSellFactor
 
 # =========================================================
 # AtrStopSellFactor：ATR 止盈止損賣出因子

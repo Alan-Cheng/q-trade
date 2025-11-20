@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from base_slippage import BaseSlippage
+from .base_slippage import BaseSlippage
 
 # =========================================================
 # SlippageOpenGap：開盤大跌滑價模型

@@ -44,6 +44,11 @@ class StockDataManager:
                     print(f"警告: {symbol} 未能下載到資料，跳過。")
                     continue
                 
+                # 自動處理 MultiIndex columns（yfinance 下載單一股票時可能會有 MultiIndex）
+                if isinstance(df.columns, pd.MultiIndex):
+                    if df.columns.nlevels > 1:
+                        df.columns = df.columns.droplevel(1)
+                
                 # 儲存 K 線資料
                 self.stock_data[symbol] = df
                 
@@ -67,46 +72,12 @@ class StockDataManager:
         回傳:
             pd.DataFrame: 股票的 K 線資料，如果資料不存在，回傳空 DataFrame。
         """
-        return self.stock_data.get(symbol, pd.DataFrame())
-    
-    
-# =========================================================
-print("="*60)
-print("StockDataManager 使用範例")
-print("="*60)
-# =========================================================
-
-# 使用範例    
-# 初始化 StockDataManager
-# 1. 定義要下載的股票代碼和時間範圍
-symbols_to_download = ["TSLA", "AAPL", "MSFT", "BABA"]
-start_date = "2023-01-01"
-# 結束日期如果為 None，則預設下載到最新日期
-
-print("## 步驟 1: 實例化 StockDataManager 並下載資料")
-data_manager = StockDataManager(symbols_to_download, start_date=start_date)
-
-# 2. 存取單一股票的 K 線資料
-target_symbol = "AAPL"
-aapl_df = data_manager.get_kl_pd(target_symbol)
-
-print(f"\n## 步驟 2: 存取 {target_symbol} 的 K 線資料")
-if not aapl_df.empty:
-    print(f"{target_symbol} 資料前 5 行:")
-    print(aapl_df.head())
-    
-    # 存取收盤價序列
-    close_series = aapl_df['Close']
-    print(f"\n{target_symbol} 收盤價序列長度: {len(close_series)}")
-else:
-    print(f"{target_symbol} 的資料不存在或下載失敗。")
-
-
-# 3. 遍歷所有已下載的股票
-print("\n## 步驟 3: 遍歷所有股票並檢查資料大小")
-for symbol in symbols_to_download:
-    df = data_manager.get_kl_pd(symbol)
-    if not df.empty:
-        print(f"  - {symbol} 的資料筆數: {len(df)}")
-    else:
-        print(f"  - {symbol} 的資料為空。")
+        df = self.stock_data.get(symbol, pd.DataFrame())
+        
+        # 確保返回的資料沒有 MultiIndex columns（雙重保險）
+        if not df.empty and isinstance(df.columns, pd.MultiIndex):
+            if df.columns.nlevels > 1:
+                df = df.copy()
+                df.columns = df.columns.droplevel(1)
+        
+        return df

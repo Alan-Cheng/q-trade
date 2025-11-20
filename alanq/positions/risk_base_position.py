@@ -1,4 +1,4 @@
-from base_position import BasePositionManager
+from .base_position import BasePositionManager
 
 # =========================================================
 # RiskBasePositionManager：基於風險的倉位管理

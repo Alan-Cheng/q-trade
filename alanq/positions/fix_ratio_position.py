@@ -1,4 +1,4 @@
-from base_position import BasePositionManager
+from .base_position import BasePositionManager
 
 # =========================================================
 # FixedRatioPositionManager：固定比例倉位管理

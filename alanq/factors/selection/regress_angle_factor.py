@@ -1,7 +1,6 @@
 import numpy as np
-from base_selection_factor import StockPickerBase
-from util.regression_util import RegressionUtil
-from util.regression_util import reversed_result
+from .base_selection_factor import StockPickerBase
+from ...util.regression_util import RegressionUtil, reversed_result
 
 # =========================================================
 # RegressAnglePicker：基於股票 K 線收盤價的線性迴歸趨勢角度進行篩選的選股因子。

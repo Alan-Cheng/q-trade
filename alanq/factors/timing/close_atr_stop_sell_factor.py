@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from base_timing_factor import BaseSellFactor
+from .base_timing_factor import BaseSellFactor
 
 # =========================================================
 # CloseAtrStopSellFactor：Trailing ATR 止盈

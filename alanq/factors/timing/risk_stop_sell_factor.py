@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from base_timing_factor import BaseSellFactor
+from .base_timing_factor import BaseSellFactor
 
 # =========================================================
 # RiskStopSellFactor：風險控制賣出因子
