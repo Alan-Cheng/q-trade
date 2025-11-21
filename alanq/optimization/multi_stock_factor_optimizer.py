@@ -17,7 +17,8 @@ def _evaluate_multi_stock_combination_worker_raw(
     stock_data_pickle: bytes,
     initial_capital: float,
     slippage_factors_pickle: bytes,
-    position_manager_pickle: Optional[bytes]
+    position_manager_pickle: Optional[bytes],
+    enable_full_rate_factor: bool = False
 ) -> Optional[Dict]:
     """
     並行處理的 worker 函數（多股票版本，只收集原始指標值，不計算得分）
@@ -54,7 +55,8 @@ def _evaluate_multi_stock_combination_worker_raw(
             sell_factors=combo['sell_factors'],
             initial_capital=initial_capital,
             slippage_factors=slippage_factors,
-            position_manager=position_manager
+            position_manager=position_manager,
+            enable_full_rate_factor=enable_full_rate_factor
         )
         
         # 多股票回測返回的結構不同
@@ -103,7 +105,8 @@ class MultiStockFactorOptimizer:
                  position_manager=None,
                  show_progress: bool = True,
                  n_jobs: int = 1,
-                 metric_weights: Optional[Dict[str, float]] = None):
+                 metric_weights: Optional[Dict[str, float]] = None,
+                 enable_full_rate_factor: bool = False):
         """
         Parameters:
         -----------
@@ -133,6 +136,8 @@ class MultiStockFactorOptimizer:
             }
             如果為 None，則使用等權重
             可用的指標請參考 scorer.AVAILABLE_METRICS
+        enable_full_rate_factor : bool
+            是否將策略收益放大為同全倉投入收益，利於與基準比較（預設 False）
         """
         self.stock_data = stock_data
         self.parameter_space = parameter_space
@@ -141,6 +146,7 @@ class MultiStockFactorOptimizer:
         self.position_manager = position_manager
         self.show_progress = show_progress
         self.metric_weights = metric_weights
+        self.enable_full_rate_factor = enable_full_rate_factor
         
         # 計算實際使用的進程數
         if n_jobs == -1:
@@ -276,7 +282,8 @@ class MultiStockFactorOptimizer:
                     stock_data_pickle,
                     self.initial_capital,
                     slippage_factors_pickle,
-                    position_manager_pickle
+                    position_manager_pickle,
+                    self.enable_full_rate_factor
                 ): (i + 1, combo)
                 for i, combo in enumerate(combinations)
             }
@@ -308,7 +315,8 @@ class MultiStockFactorOptimizer:
             sell_factors=combo['sell_factors'],
             initial_capital=self.initial_capital,
             slippage_factors=self.slippage_factors,
-            position_manager=self.position_manager
+            position_manager=self.position_manager,
+            enable_full_rate_factor=self.enable_full_rate_factor
         )
         
         # 多股票回測返回的結構不同

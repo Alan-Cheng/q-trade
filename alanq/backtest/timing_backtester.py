@@ -23,7 +23,10 @@ class MultiStockBacktester:
                  strategy_config: dict = None, # {股票代號: {'buy_factors': list, 'sell_factors': list}}
                  initial_capital: float = 1_000_000,
                  position_manager: BasePositionManager = None,
-                 slippage_factors: list = None):
+                 slippage_factors: list = None,
+                 # 新增 enable_full_rate_factor
+                 enable_full_rate_factor: bool = False,
+                 ):
         """
         Parameters:
         -----------
@@ -43,6 +46,8 @@ class MultiStockBacktester:
         strategy_config : dict
             客製化策略字典，格式：{股票代號: {'buy_factors': list, 'sell_factors': list}}
             如果某股票在此字典中，將使用其專屬策略，否則使用全局 buy_factors/sell_factors。
+        enable_full_rate_factor : bool
+            是否將策略收益放大為同全倉投入收益，利於與基準比較
         """
         self.stock_data = stock_data
         # 將全局配置儲存起來
@@ -58,6 +63,7 @@ class MultiStockBacktester:
         self.sell_factors = sell_factors or []
         self.initial_capital = initial_capital
         self.slippage_factors = slippage_factors or []
+        self.enable_full_rate_factor = enable_full_rate_factor
         
         # 倉位管理（預設使用固定比例）
         if position_manager is None:
@@ -223,17 +229,13 @@ class MultiStockBacktester:
                 self.slippage_models[key] = model_instance
     
     def _create_trading_calendar(self):
-        """建立統一的交易日曆（所有股票的交集日期）"""
         all_dates = None
-        
         for symbol, signals in self.stock_signals.items():
             df = signals['df']
             if all_dates is None:
                 all_dates = set(df.index)
             else:
                 all_dates = all_dates.intersection(set(df.index))
-        
-        # 轉換為排序後的列表
         self.trading_dates = sorted(list(all_dates))
     
     def _run_multi_stock_backtest(self):
@@ -417,55 +419,94 @@ class MultiStockBacktester:
             df['position'] = df['position'].fillna(0)
     
     def _compute_performance(self):
-        """計算績效指標"""
-        # 計算每日報酬率
-        equity_series = self.equity_history
-        daily_returns = equity_series.pct_change().dropna()
+        """計算績效指標 (修正：滿倉乘數會重建權益曲線)"""
+        
+        # 1. 取得原始權益曲線 (這是基於實際資金部位計算出來的)
+        raw_equity_series = self.equity_history
+        raw_daily_returns = raw_equity_series.pct_change().dropna()
+        
+        # 預設：如果沒開滿倉，最終結果就是原始結果
+        final_equity_series = raw_equity_series
+        final_daily_returns = raw_daily_returns
+        
+        # ===== 滿倉乘數調整邏輯 =====
+        if self.enable_full_rate_factor:
+            # 計算每日資金使用率 (持倉市值 / 總資金)
+            # 注意：這裡的總資金是指當下的總權益 (Total Equity)
+            position_value = raw_equity_series - self.cash_history
+            stocks_full_rate = position_value / raw_equity_series
+
+            # 避免除以 0：如果全現金，使用率為 0，設為 1 (避免報錯，且回報為 0 乘任何數還是 0)
+            stocks_full_rate = stocks_full_rate.replace(0, 1)
+
+            # 滿倉乘數 = 1 / 資金使用率
+            # 例如：只用了 50% 資金，乘數就是 2 倍
+            full_rate_factor = 1 / stocks_full_rate
+
+            # 調整後的日報酬率 (將實際報酬放大回滿倉水準)
+            # 注意：iloc[1:] 是因為 pct_change 第一筆是 NaN 或 0
+            adjusted_daily_returns = raw_daily_returns * full_rate_factor
+            
+            # *** 關鍵修正：重建權益曲線 ***
+            # 利用調整後的報酬率，從初始資金開始滾動複利
+            cumulative_returns = (1 + adjusted_daily_returns).cumprod()
+            reconstructed_equity = self.initial_capital * cumulative_returns
+            
+            # 更新最終使用的數據
+            final_daily_returns = adjusted_daily_returns
+            final_equity_series = reconstructed_equity
+
+        # 2. 計算各項績效 (全部使用 final_equity_series)
         
         # 總報酬率
-        total_return = (equity_series.iloc[-1] / self.initial_capital)
+        total_return = (final_equity_series.iloc[-1] / self.initial_capital) - 1
         
         # 年化報酬率
-        days = (equity_series.index[-1] - equity_series.index[0]).days
+        days = (final_equity_series.index[-1] - final_equity_series.index[0]).days
         years = days / 365.0 if days > 0 else 1.0
         annual_return = (1 + total_return) ** (1 / years) - 1 if years > 0 else total_return
         
         # 波動率和 Sharpe
-        if len(daily_returns) > 1 and daily_returns.std() > 0:
-            volatility = daily_returns.std() * np.sqrt(252)
-            sharpe = (daily_returns.mean() / daily_returns.std()) * np.sqrt(252) if daily_returns.std() > 0 else np.nan
+        if len(final_daily_returns) > 1 and final_daily_returns.std() > 0:
+            volatility = final_daily_returns.std() * np.sqrt(252)
+            sharpe = (final_daily_returns.mean() / final_daily_returns.std()) * np.sqrt(252)
         else:
             volatility = np.nan
             sharpe = np.nan
         
         # 最大回撤
-        roll_max = equity_series.cummax()
-        drawdown = equity_series / roll_max - 1.0
+        roll_max = final_equity_series.cummax()
+        drawdown = final_equity_series / roll_max - 1.0
         max_drawdown = drawdown.min()
         
-        # 計算 Benchmark 績效（多股票平均分散）
+        # 計算 Benchmark
         benchmark_result = Benchmark.compute_multi_stock_benchmark(self.stock_data, self.initial_capital)
         self.benchmark_equity = benchmark_result['equity_curve']
         self.benchmark_stats = benchmark_result['stats']
         
+        # 決定 Key 的前綴名稱
+        # prefix = "策略(滿倉模擬)" if self.enable_full_rate_factor else "策略(實際)"
+        # 先不要改prefix，否則會導致 score.py 裡面的 AVAILABLE_METRICS 需要修改
+        prefix = "策略"
+
         # 儲存統計資料
         self.stats = {
-            "策略_總報酬率": total_return,
-            "策略_年化報酬率": annual_return,
-            "策略_年化波動率": volatility,
-            "策略_Sharpe": sharpe,
-            "策略_最大回撤": max_drawdown,
-            "策略_最終權益": equity_series.iloc[-1],
-            "策略_最終現金": self.cash_history.iloc[-1],
+            f"{prefix}_總報酬率": total_return,
+            f"{prefix}_年化報酬率": annual_return,
+            f"{prefix}_年化波動率": volatility,
+            f"{prefix}_Sharpe": sharpe,
+            f"{prefix}_最大回撤": max_drawdown,
+            f"{prefix}_最終權益": final_equity_series.iloc[-1],
+            "策略_實際最終現金": self.cash_history.iloc[-1], # 永遠顯示實際現金
             "基準_總報酬率": self.benchmark_stats.get("總報酬率", np.nan),
             "基準_年化報酬率": self.benchmark_stats.get("年化報酬率", np.nan),
-            "基準_年化波動率": self.benchmark_stats.get("年化波動率", np.nan),
             "基準_Sharpe": self.benchmark_stats.get("Sharpe", np.nan),
             "基準_最大回撤": self.benchmark_stats.get("最大回撤", np.nan),
         }
         
-        # 儲存權益曲線
-        self.stock_results['equity_curve'] = equity_series
+        # 儲存結果供繪圖使用
+        self.stock_results['equity_curve'] = final_equity_series       # 這是最終要畫的主線
+        self.stock_results['raw_equity_curve'] = raw_equity_series     # 這是實際資金曲線 (供對照)
         self.stock_results['cash_curve'] = self.cash_history
         self.stock_results['benchmark_equity'] = self.benchmark_equity
     
@@ -554,46 +595,63 @@ class MultiStockBacktester:
         self.canceled_trades = pd.DataFrame(all_canceled)
     
     def _plot_results(self):
-        """Plots the backtest results."""
-        # Create two subplots: Equity Curve and Capital Allocation
+        """Plots the backtest results (Updated for Full Rate Flag)."""
         fig, axes = plt.subplots(2, 1, figsize=(16, 10))
         
         # --- Top Subplot: Equity Curve ---
         
-        # Plot the strategy's total equity over time
-        axes[0].plot(self.equity_history.index, self.equity_history.values, 
-                    label='Strategy Equity', linewidth=2)
+        # 判斷標題與標籤
+        title_suffix = "(Full Rate Adjusted)" if self.enable_full_rate_factor else "(Actual Capital)"
+        label_prefix = "Adjusted Strategy" if self.enable_full_rate_factor else "Strategy"
         
-        # Plot benchmark equity if available
+        equity_curve = self.stock_results['equity_curve']
+        
+        # 繪製主要策略曲線
+        axes[0].plot(equity_curve.index, equity_curve.values, 
+                    label=f'{label_prefix} Equity', linewidth=2, color='blue')
+        
+        # 如果是滿倉模式，額外畫一條虛線顯示「原始(實際)權益」，方便對比差異
+        if self.enable_full_rate_factor:
+            raw_equity = self.stock_results.get('raw_equity_curve')
+            if raw_equity is not None:
+                 axes[0].plot(raw_equity.index, raw_equity.values, 
+                    label='Actual Equity (Unadjusted)', linewidth=1.5, color='gray', linestyle=':', alpha=0.6)
+
+        # 繪製 Benchmark
         if self.benchmark_equity is not None and not self.benchmark_equity.empty:
-            # 對齊日期索引
-            benchmark_aligned = self.benchmark_equity.reindex(self.equity_history.index, method='ffill')
+            benchmark_aligned = self.benchmark_equity.reindex(equity_curve.index, method='ffill')
             axes[0].plot(benchmark_aligned.index, benchmark_aligned.values, 
-                        label='Benchmark (Buy & Hold)', linewidth=2, linestyle='--', alpha=0.7)
+                        label='Benchmark (Buy & Hold)', linewidth=2, linestyle='--', color='orange', alpha=0.7)
         
-        # Draw a dashed line for the initial capital
         axes[0].axhline(y=self.initial_capital, color='r', linestyle='--', 
                     label=f'Initial Capital ({self.initial_capital:,.0f})', alpha=0.5)
                     
-        axes[0].set_title('Multi-Stock Backtest - Equity Curve', fontsize=14)
-        axes[0].set_ylabel('Equity', fontsize=12) # Note: Adjust currency label as needed
+        axes[0].set_title(f'Multi-Stock Backtest - Equity Curve {title_suffix}', fontsize=14)
+        axes[0].set_ylabel('Equity', fontsize=12)
         axes[0].legend()
         axes[0].grid(True)
         
         # --- Bottom Subplot: Capital Allocation ---
+        # 注意：資金配置圖 (Capital Allocation) 應該永遠顯示「實際」的資金使用狀況
+        # 這樣才能看出為什麼需要開啟「滿倉乘數」(例如：因為大部分時間現金部位過高)
         
-        # Calculate the current market value of the holdings (Position Value)
-        position_value = self.equity_history - self.cash_history
+        raw_equity = self.stock_results.get('raw_equity_curve', equity_curve)
+        position_value = raw_equity - self.cash_history
         
-        # Plot Cash and Position Value
         axes[1].plot(self.cash_history.index, self.cash_history.values, 
-                    label='Cash', alpha=0.7)
+                    label='Actual Cash', alpha=0.7, color='green')
         axes[1].plot(position_value.index, position_value.values, 
-                    label='Position Value', alpha=0.7)
-                    
-        axes[1].set_title('Capital Allocation', fontsize=14)
+                    label='Actual Position Value', alpha=0.7, color='purple')
+        
+        # 如果是滿倉模式，加個註解說明
+        if self.enable_full_rate_factor:
+            axes[1].text(0.01, 0.95, "Note: Showing actual capital usage.\nFull rate adjustment applies to returns only.", 
+                         transform=axes[1].transAxes, fontsize=10, 
+                         bbox=dict(boxstyle="round", alpha=0.1, color='black'))
+
+        axes[1].set_title('Capital Allocation (Actual Usage)', fontsize=14)
         axes[1].set_xlabel('Date', fontsize=12)
-        axes[1].set_ylabel('Amount', fontsize=12) # Note: Adjust currency label as needed
+        axes[1].set_ylabel('Amount', fontsize=12)
         axes[1].legend()
         axes[1].grid(True)
         

@@ -137,7 +137,7 @@ class Benchmark:
             }
         
         # 總報酬率（倍數形式，與策略保持一致）
-        total_ret = equity_curve.iloc[-1] / initial_capital
+        total_ret = equity_curve.iloc[-1] / initial_capital - 1
         
         # 年化報酬率（與策略計算方式保持一致）
         days = (equity_curve.index[-1] - equity_curve.index[0]).days

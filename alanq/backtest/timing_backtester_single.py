@@ -407,7 +407,7 @@ class Backtester:
         # ----------------------------
         # 策略績效（strategy）
         # ----------------------------
-        total_ret = df["strategy_equity"].iloc[-1] / self.initial_capital
+        total_ret = df["strategy_equity"].iloc[-1] / self.initial_capital - 1
 
         days = (df.index[-1] - df.index[0]).days
         years = days / 365.0 if days > 0 else 1.0
