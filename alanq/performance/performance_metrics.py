@@ -10,7 +10,7 @@ class PerformanceMetrics:
     Used to calculate and display various performance metrics from backtest results
     """
     
-    def __init__(self, trades: pd.DataFrame, stats: dict, 
+    def __init__(self, trades: pd.DataFrame, stats: dict = None, 
                  equity_curve: pd.Series = None, 
                  initial_capital: float = None):
         """
@@ -26,17 +26,24 @@ class PerformanceMetrics:
             - shares: number of shares
             - return_pct: return percentage
             - pnl: profit and loss amount
-        stats : dict
-            Basic statistics dictionary
-        equity_curve : pd.Series
-            Equity curve time series (optional)
-        initial_capital : float
-            Initial capital (optional)
+        stats : dict, optional
+            Basic statistics dictionary. If not provided, will be calculated from equity_curve
+        equity_curve : pd.Series, optional
+            Equity curve time series. Required if stats is not provided
+        initial_capital : float, optional
+            Initial capital. Required if stats is not provided
         """
         self.trades = trades.copy()
-        self.stats = stats.copy()
         self.equity_curve = equity_curve
-        self.initial_capital = initial_capital or stats.get('initial_capital', None)
+        self.initial_capital = initial_capital or (stats.get('initial_capital', None) if stats else None)
+        
+        # If stats is not provided, calculate it from equity_curve
+        if stats is None:
+            if equity_curve is None or initial_capital is None:
+                raise ValueError("If stats is not provided, both equity_curve and initial_capital must be provided")
+            self.stats = self._calculate_basic_stats()
+        else:
+            self.stats = stats.copy()
         
         # Calculate detailed metrics
         self._calculate_detailed_metrics()
@@ -135,6 +142,63 @@ class PerformanceMetrics:
         
         return max_consecutive_wins, max_consecutive_losses
     
+    def _calculate_basic_stats(self):
+        """
+        Calculate basic performance statistics from equity curve
+        
+        Returns:
+        --------
+        dict : Dictionary containing basic performance metrics
+        """
+        if self.equity_curve is None or self.initial_capital is None:
+            return {}
+        
+        if self.equity_curve.empty:
+            return {
+                "策略_總報酬率": np.nan,
+                "策略_年化報酬率": np.nan,
+                "策略_年化波動率": np.nan,
+                "策略_Sharpe": np.nan,
+                "策略_最大回撤": np.nan,
+                "策略_最終權益": np.nan,
+            }
+        
+        # 總報酬率
+        total_return = (self.equity_curve.iloc[-1] / self.initial_capital) - 1
+        
+        # 年化報酬率
+        days = (self.equity_curve.index[-1] - self.equity_curve.index[0]).days
+        years = days / 365.0 if days > 0 else 1.0
+        annual_return = (1 + total_return) ** (1 / years) - 1 if years > 0 else total_return
+        
+        # 計算每日報酬率
+        daily_returns = self.equity_curve.pct_change().dropna()
+        
+        # 波動率和 Sharpe
+        if len(daily_returns) > 1 and daily_returns.std() > 0:
+            volatility = daily_returns.std() * np.sqrt(252)
+            sharpe = (daily_returns.mean() / daily_returns.std()) * np.sqrt(252)
+        else:
+            volatility = np.nan
+            sharpe = np.nan
+        
+        # 最大回撤
+        roll_max = self.equity_curve.cummax()
+        drawdown = self.equity_curve / roll_max - 1.0
+        max_drawdown = drawdown.min()
+        
+        # 最終權益
+        final_equity = self.equity_curve.iloc[-1]
+        
+        return {
+            "策略_總報酬率": total_return,
+            "策略_年化報酬率": annual_return,
+            "策略_年化波動率": volatility,
+            "策略_Sharpe": sharpe,
+            "策略_最大回撤": max_drawdown,
+            "策略_最終權益": final_equity,
+        }
+    
     def show_summary(self, format_numbers=True):
         """
         Display performance summary
@@ -155,14 +219,14 @@ class PerformanceMetrics:
             'Sharpe', 'max_drawdown', 'final_equity'
         ]
         
-        # Map Chinese keys to English keys
+        # Map English keys to Chinese keys (support both with and without prefix)
         key_mapping = {
-            'total_return': '總報酬率',
-            'annual_return': '年化報酬率',
-            'annual_volatility': '年化波動率',
-            'Sharpe': 'Sharpe',
-            'max_drawdown': '最大回撤',
-            'final_equity': '最終權益'
+            'total_return': ['總報酬率', '策略_總報酬率'],
+            'annual_return': ['年化報酬率', '策略_年化報酬率'],
+            'annual_volatility': ['年化波動率', '策略_年化波動率'],
+            'Sharpe': ['Sharpe', '策略_Sharpe'],
+            'max_drawdown': ['最大回撤', '策略_最大回撤'],
+            'final_equity': ['最終權益', '策略_最終權益']
         }
         
         display_names = {
@@ -175,9 +239,15 @@ class PerformanceMetrics:
         }
         
         for key in basic_metrics:
-            chinese_key = key_mapping.get(key, key)
-            if chinese_key in self.stats:
-                value = self.stats[chinese_key]
+            chinese_keys = key_mapping.get(key, [key])
+            # Try to find the key in stats (support both with and without prefix)
+            value = None
+            for chinese_key in chinese_keys:
+                if chinese_key in self.stats:
+                    value = self.stats[chinese_key]
+                    break
+            
+            if value is not None:
                 display_name = display_names.get(key, key)
                 if format_numbers and isinstance(value, float):
                     if key in ['total_return', 'annual_return', 'annual_volatility', 'Sharpe', 'max_drawdown']:
@@ -294,8 +364,13 @@ class PerformanceMetrics:
                       alpha=0.7, label=f'Initial Capital ({self.initial_capital:,.0f})')
         
         # Mark maximum drawdown
-        max_dd_key = '最大回撤'
-        if max_dd_key in self.stats:
+        max_dd_key = None
+        for key in ['策略_最大回撤', '最大回撤']:
+            if key in self.stats:
+                max_dd_key = key
+                break
+        
+        if max_dd_key is not None:
             roll_max = self.equity_curve.cummax()
             drawdown = self.equity_curve / roll_max - 1.0
             max_dd_idx = drawdown.idxmin()
