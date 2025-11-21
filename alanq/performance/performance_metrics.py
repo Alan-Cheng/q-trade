@@ -1,6 +1,28 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from typing import List, Optional, Dict, Any
+
+# 導入指標類別
+from .basic import (
+    BaseBasicMetric,
+    TotalReturnMetric,
+    AnnualReturnMetric,
+    VolatilityMetric,
+    SharpeMetric,
+    MaxDrawdownMetric,
+    FinalEquityMetric,
+)
+from .detail import (
+    BaseDetailedMetric,
+    BasicTradeStatsMetric,
+    WinRateMetric,
+    ProfitLossStatsMetric,
+    ExtremeTradesMetric,
+    HoldingStatsMetric,
+    ConsecutiveTradesMetric,
+)
+
 # =========================================================
 # Performance Metrics Display Class
 # =========================================================
@@ -12,7 +34,9 @@ class PerformanceMetrics:
     
     def __init__(self, trades: pd.DataFrame, stats: dict = None, 
                  equity_curve: pd.Series = None, 
-                 initial_capital: float = None):
+                 initial_capital: float = None,
+                 basic_metrics: Optional[List[Dict[str, Any]]] = None,
+                 detailed_metrics: Optional[List[Dict[str, Any]]] = None):
         """
         Parameters:
         -----------
@@ -32,10 +56,18 @@ class PerformanceMetrics:
             Equity curve time series. Required if stats is not provided
         initial_capital : float, optional
             Initial capital. Required if stats is not provided
+        basic_metrics : list, optional
+            基本指標列表，格式：[{"class": TotalReturnMetric}, {"class": SharpeMetric}, ...]
+            如果為 None，則使用預設指標組合
+        detailed_metrics : list, optional
+            詳細指標列表，格式：[{"class": BasicTradeStatsMetric}, {"class": WinRateMetric}, ...]
+            如果為 None，則使用預設指標組合
         """
         self.trades = trades.copy()
         self.equity_curve = equity_curve
         self.initial_capital = initial_capital or (stats.get('initial_capital', None) if stats else None)
+        self.basic_metrics_config = basic_metrics
+        self.detailed_metrics_config = detailed_metrics
         
         # If stats is not provided, calculate it from equity_curve
         if stats is None:
@@ -49,102 +81,65 @@ class PerformanceMetrics:
         self._calculate_detailed_metrics()
     
     def _calculate_detailed_metrics(self):
-        """Calculate detailed performance metrics"""
+        """Calculate detailed performance metrics using metric classes"""
         if len(self.trades) == 0:
             self.detailed_stats = {}
             return
         
-        # Basic trade statistics
-        total_trades = len(self.trades)
-        winning_trades = len(self.trades[self.trades['pnl'] > 0])
-        losing_trades = len(self.trades[self.trades['pnl'] < 0])
-        breakeven_trades = len(self.trades[self.trades['pnl'] == 0])
+        # 決定使用哪些指標
+        if self.detailed_metrics_config is None:
+            metrics_config = self._get_default_detailed_metrics()
+        else:
+            metrics_config = self.detailed_metrics_config
         
-        # Win rate
-        win_rate = winning_trades / total_trades if total_trades > 0 else 0
+        self.detailed_stats = {}
         
-        # Average profit/loss
-        avg_win = self.trades[self.trades['pnl'] > 0]['pnl'].mean() if winning_trades > 0 else 0
-        avg_loss = abs(self.trades[self.trades['pnl'] < 0]['pnl'].mean()) if losing_trades > 0 else 0
-        
-        # Profit/Loss ratio
-        profit_loss_ratio = avg_win / avg_loss if avg_loss > 0 else np.inf
-        
-        # Total profit/loss
-        total_profit = self.trades[self.trades['pnl'] > 0]['pnl'].sum() if winning_trades > 0 else 0
-        total_loss = abs(self.trades[self.trades['pnl'] < 0]['pnl'].sum()) if losing_trades > 0 else 0
-        
-        # Max single trade profit/loss
-        max_profit = self.trades['pnl'].max()
-        max_loss = self.trades['pnl'].min()
-        
-        # Average holding days
-        avg_holding_days = self.trades['holding_days'].mean() if 'holding_days' in self.trades.columns else 0
-        
-        # Average return
-        avg_return = self.trades['return_pct'].mean()
-        
-        # Consecutive wins/losses
-        consecutive_wins, consecutive_losses = self._calculate_consecutive_trades()
-        
-        # Store detailed statistics
-        self.detailed_stats = {
-            'total_trades': total_trades,
-            'winning_trades': winning_trades,
-            'losing_trades': losing_trades,
-            'breakeven_trades': breakeven_trades,
-            'win_rate': win_rate,
-            'avg_profit': avg_win,
-            'avg_loss': avg_loss,
-            'profit_loss_ratio': profit_loss_ratio,
-            'total_profit': total_profit,
-            'total_loss': total_loss,
-            'net_profit': total_profit - total_loss,
-            'max_single_profit': max_profit,
-            'max_single_loss': max_loss,
-            'avg_holding_days': avg_holding_days,
-            'avg_return': avg_return,
-            'max_consecutive_wins': consecutive_wins,
-            'max_consecutive_losses': consecutive_losses,
-        }
+        # 按順序計算每個指標
+        for metric_config in metrics_config:
+            MetricClass = metric_config["class"]
+            params = {k: v for k, v in metric_config.items() if k != "class"}
+            
+            # 實例化指標類別
+            metric = MetricClass(**params)
+            
+            try:
+                # 計算指標
+                result = metric.calculate(
+                    self.trades,
+                    self.detailed_stats  # 傳入已計算的指標，允許依賴
+                )
+                self.detailed_stats.update(result)
+            except Exception as e:
+                # 如果計算失敗，記錄警告但繼續
+                import warnings
+                warnings.warn(f"計算詳細指標 '{metric.__class__.__name__}' 時發生錯誤: {e}")
     
-    def _calculate_consecutive_trades(self):
-        """Calculate maximum consecutive wins and losses"""
-        if len(self.trades) == 0:
-            return 0, 0
-        
-        # Sort by date
-        trades_sorted = self.trades.sort_values('entry_date')
-        
-        # Determine if each trade is profit or loss
-        is_profit = (trades_sorted['pnl'] > 0).astype(int)
-        is_loss = (trades_sorted['pnl'] < 0).astype(int)
-        
-        # Calculate consecutive wins
-        max_consecutive_wins = 0
-        current_wins = 0
-        for profit in is_profit:
-            if profit == 1:
-                current_wins += 1
-                max_consecutive_wins = max(max_consecutive_wins, current_wins)
-            else:
-                current_wins = 0
-        
-        # Calculate consecutive losses
-        max_consecutive_losses = 0
-        current_losses = 0
-        for loss in is_loss:
-            if loss == 1:
-                current_losses += 1
-                max_consecutive_losses = max(max_consecutive_losses, current_losses)
-            else:
-                current_losses = 0
-        
-        return max_consecutive_wins, max_consecutive_losses
+    
+    def _get_default_basic_metrics(self):
+        """取得預設的基本指標組合"""
+        return [
+            {"class": TotalReturnMetric},
+            {"class": AnnualReturnMetric},
+            {"class": VolatilityMetric},
+            {"class": SharpeMetric},
+            {"class": MaxDrawdownMetric},
+            {"class": FinalEquityMetric},
+        ]
+    
+    def _get_default_detailed_metrics(self):
+        """取得預設的詳細指標組合"""
+        return [
+            {"class": BasicTradeStatsMetric},
+            {"class": WinRateMetric},
+            {"class": ProfitLossStatsMetric},
+            {"class": ExtremeTradesMetric},
+            {"class": HoldingStatsMetric},
+            {"class": ConsecutiveTradesMetric},
+        ]
     
     def _calculate_basic_stats(self):
         """
-        Calculate basic performance statistics from equity curve
+        Calculate basic performance statistics from equity curve using metric classes
         
         Returns:
         --------
@@ -163,41 +158,36 @@ class PerformanceMetrics:
                 "策略_最終權益": np.nan,
             }
         
-        # 總報酬率
-        total_return = (self.equity_curve.iloc[-1] / self.initial_capital) - 1
-        
-        # 年化報酬率
-        days = (self.equity_curve.index[-1] - self.equity_curve.index[0]).days
-        years = days / 365.0 if days > 0 else 1.0
-        annual_return = (1 + total_return) ** (1 / years) - 1 if years > 0 else total_return
-        
-        # 計算每日報酬率
-        daily_returns = self.equity_curve.pct_change().dropna()
-        
-        # 波動率和 Sharpe
-        if len(daily_returns) > 1 and daily_returns.std() > 0:
-            volatility = daily_returns.std() * np.sqrt(252)
-            sharpe = (daily_returns.mean() / daily_returns.std()) * np.sqrt(252)
+        # 決定使用哪些指標
+        if self.basic_metrics_config is None:
+            metrics_config = self._get_default_basic_metrics()
         else:
-            volatility = np.nan
-            sharpe = np.nan
+            metrics_config = self.basic_metrics_config
         
-        # 最大回撤
-        roll_max = self.equity_curve.cummax()
-        drawdown = self.equity_curve / roll_max - 1.0
-        max_drawdown = drawdown.min()
+        stats = {}
         
-        # 最終權益
-        final_equity = self.equity_curve.iloc[-1]
+        # 按順序計算每個指標
+        for metric_config in metrics_config:
+            MetricClass = metric_config["class"]
+            params = {k: v for k, v in metric_config.items() if k != "class"}
+            
+            # 實例化指標類別
+            metric = MetricClass(**params)
+            
+            try:
+                # 計算指標
+                result = metric.calculate(
+                    self.equity_curve,
+                    self.initial_capital,
+                    stats  # 傳入已計算的指標，允許依賴
+                )
+                stats.update(result)
+            except Exception as e:
+                # 如果計算失敗，記錄警告但繼續
+                import warnings
+                warnings.warn(f"計算指標 '{metric.metric_name}' 時發生錯誤: {e}")
         
-        return {
-            "策略_總報酬率": total_return,
-            "策略_年化報酬率": annual_return,
-            "策略_年化波動率": volatility,
-            "策略_Sharpe": sharpe,
-            "策略_最大回撤": max_drawdown,
-            "策略_最終權益": final_equity,
-        }
+        return stats
     
     def show_summary(self, format_numbers=True):
         """
