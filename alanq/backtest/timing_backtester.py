@@ -81,9 +81,22 @@ class MultiStockBacktester:
         self.slippage_cols = []  # 記錄所有滑價因子欄位名稱的列表
         self.canceled_trades = None  # 儲存被滑價取消的交易紀錄
         
-    def run(self, show_plot=False):
+    def run(self, show_plot=False, show_trades_plot=False, plot_symbols=None, plot_start=None, plot_end=None):
         """
         執行回測
+        
+        Parameters:
+        -----------
+        show_plot : bool
+            是否顯示權益曲線圖
+        show_trades_plot : bool
+            是否顯示交易點視覺化圖
+        plot_symbols : list or None
+            要繪製交易圖的股票代號列表，如果為 None 則繪製所有有交易的股票
+        plot_start : str or datetime
+            交易圖的起始日期（可選）
+        plot_end : str or datetime
+            交易圖的結束日期（可選）
         
         Returns:
         --------
@@ -112,6 +125,9 @@ class MultiStockBacktester:
         
         if show_plot:
             self._plot_results()
+        
+        if show_trades_plot:
+            self._plot_trades(plot_symbols=plot_symbols, plot_start=plot_start, plot_end=plot_end)
         
         # 根據是否有滑價，決定回傳數量
         base_results = (self.stock_results, self.trades, self.stats)
@@ -583,3 +599,114 @@ class MultiStockBacktester:
         
         plt.tight_layout()
         plt.show()
+    
+    def _plot_trades(self, plot_symbols=None, plot_start=None, plot_end=None):
+        """
+        繪製交易點視覺化圖（類似 timing_backtester_single.py 的功能）
+        
+        Parameters:
+        -----------
+        plot_symbols : list or None
+            要繪製的股票代號列表，如果為 None 則繪製所有有交易的股票
+        plot_start : str or datetime
+            起始日期（可選）
+        plot_end : str or datetime
+            結束日期（可選）
+        """
+        if self.trades is None or len(self.trades) == 0:
+            print("沒有交易記錄可繪製")
+            return
+        
+        # 決定要繪製哪些股票
+        if plot_symbols is None:
+            # 繪製所有有交易的股票
+            symbols_to_plot = self.trades['symbol'].unique().tolist()
+        else:
+            # 只繪製指定的股票
+            symbols_to_plot = [s for s in plot_symbols if s in self.trades['symbol'].values]
+            if not symbols_to_plot:
+                print(f"指定的股票代號 {plot_symbols} 沒有交易記錄")
+                return
+        
+        # 為每個股票分別繪製
+        for symbol in symbols_to_plot:
+            # 取得該股票的資料
+            if symbol not in self.stock_signals:
+                continue
+            
+            df = self.stock_signals[symbol]['df'].copy()
+            
+            # 篩選該股票的交易記錄
+            symbol_trades = self.trades[self.trades['symbol'] == symbol].copy()
+            
+            if len(symbol_trades) == 0:
+                continue
+            
+            # 日期篩選
+            if plot_start:
+                start_date = pd.to_datetime(plot_start)
+                df = df[df.index >= start_date]
+                symbol_trades = symbol_trades[symbol_trades['entry_date'] >= start_date]
+            
+            if plot_end:
+                end_date = pd.to_datetime(plot_end)
+                df = df[df.index <= end_date]
+                symbol_trades = symbol_trades[symbol_trades['exit_date'] <= end_date]
+            
+            if len(df) == 0 or len(symbol_trades) == 0:
+                continue
+            
+            # 繪製圖表
+            plt.figure(figsize=(18, 6))
+            
+            # ---- 黑色收盤線 ----
+            plt.plot(df.index, df["Close"], color="black", label="Close", linewidth=1.5)
+            
+            # ---- 藍色底色 ----
+            plt.fill_between(df.index, 0, df["Close"], color="blue", alpha=0.05)
+            
+            # ---- 逐筆畫出交易 ----
+            is_first_trade = True
+            for idx, t in symbol_trades.iterrows():
+                buy = t["entry_date"]
+                sell = t["exit_date"]
+                buy_price = t["entry_price"]
+                sell_price = t["exit_price"]
+                pnl = sell_price - buy_price
+                pnl_rate = t["return_pct"]
+                
+                color = "green" if pnl > 0 else "red"
+                
+                # 區間 mask
+                mask = (df.index >= buy) & (df.index <= sell)
+                
+                if mask.sum() > 0:
+                    # 區間背景
+                    plt.fill_between(df.index[mask],
+                                    0, df["Close"][mask],
+                                    color=color, alpha=0.28)
+                
+                # Buy / Sell 散點
+                if buy in df.index:
+                    plt.scatter(buy, buy_price, color="blue", s=80, zorder=5, 
+                              label="Buy" if is_first_trade else "")
+                if sell in df.index:
+                    plt.scatter(sell, sell_price, color="orange", s=80, zorder=5, 
+                              label="Sell" if is_first_trade else "")
+                
+                # 盈虧數字
+                if sell in df.index:
+                    plt.text(sell, sell_price,
+                            f"{pnl:+.2f} ({pnl_rate:+.2%})",
+                            color=color, fontsize=9,
+                            ha="left", va="bottom")
+                
+                is_first_trade = False
+            
+            plt.title(f"Trade Visualization - {symbol}", fontsize=14)
+            plt.xlabel("Date", fontsize=12)
+            plt.ylabel("Price", fontsize=12)
+            plt.grid(True, alpha=0.3)
+            plt.legend()
+            plt.tight_layout()
+            plt.show()
