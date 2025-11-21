@@ -15,8 +15,22 @@ from .basic import (
 )
 from .detail import (
     BaseDetailedMetric,
-    BasicTradeStatsMetric,
     WinRateMetric,
+    TotalTradesMetric,
+    WinningTradesMetric,
+    LosingTradesMetric,
+    ProfitLossRatioMetric,
+    AvgProfitMetric,
+    AvgLossMetric,
+    NetProfitMetric,
+    MaxSingleProfitMetric,
+    MaxSingleLossMetric,
+    AvgHoldingDaysMetric,
+    AvgReturnMetric,
+    MaxConsecutiveWinsMetric,
+    MaxConsecutiveLossesMetric,
+    # 保留舊的作為向後相容
+    BasicTradeStatsMetric,
     ProfitLossStatsMetric,
     ExtremeTradesMetric,
     HoldingStatsMetric,
@@ -129,12 +143,19 @@ class PerformanceMetrics:
     def _get_default_detailed_metrics(self):
         """取得預設的詳細指標組合"""
         return [
-            {"class": BasicTradeStatsMetric},
-            {"class": WinRateMetric},
-            {"class": ProfitLossStatsMetric},
-            {"class": ExtremeTradesMetric},
-            {"class": HoldingStatsMetric},
-            {"class": ConsecutiveTradesMetric},
+            {"class": TotalTradesMetric},          # 先計算總交易次數（其他指標可能依賴）
+            {"class": WinningTradesMetric},        # 計算獲利交易次數（WinRateMetric 依賴）
+            {"class": WinRateMetric},              # 計算勝率（依賴 winning_trades 和 total_trades）
+            {"class": ProfitLossRatioMetric},
+            {"class": AvgProfitMetric},
+            {"class": AvgLossMetric},
+            {"class": NetProfitMetric},
+            {"class": MaxSingleProfitMetric},
+            {"class": MaxSingleLossMetric},
+            {"class": AvgHoldingDaysMetric},
+            {"class": AvgReturnMetric},
+            {"class": MaxConsecutiveWinsMetric},
+            {"class": MaxConsecutiveLossesMetric},
         ]
     
     def _calculate_basic_stats(self):

@@ -7,6 +7,8 @@ import pickle
 
 from ..backtest.timing_backtester import MultiStockBacktester
 from ..performance.performance_metrics import PerformanceMetrics
+from ..performance.basic.base_basic_metric import BaseBasicMetric
+from ..performance.detail.base_detailed_metric import BaseDetailedMetric
 from .parameter_space import ParameterSpace
 from .scorer import AVAILABLE_METRICS
 
@@ -18,7 +20,9 @@ def _evaluate_multi_stock_combination_worker_raw(
     initial_capital: float,
     slippage_factors_pickle: bytes,
     position_manager_pickle: Optional[bytes],
-    enable_full_rate_factor: bool = False
+    enable_full_rate_factor: bool = False,
+    basic_metrics_pickle: Optional[bytes] = None,
+    detailed_metrics_pickle: Optional[bytes] = None
 ) -> Optional[Dict]:
     """
     並行處理的 worker 函數（多股票版本，只收集原始指標值，不計算得分）
@@ -47,6 +51,8 @@ def _evaluate_multi_stock_combination_worker_raw(
         stock_data = pickle.loads(stock_data_pickle)
         slippage_factors = pickle.loads(slippage_factors_pickle) if slippage_factors_pickle else []
         position_manager = pickle.loads(position_manager_pickle) if position_manager_pickle else None
+        basic_metrics = pickle.loads(basic_metrics_pickle) if basic_metrics_pickle else None
+        detailed_metrics = pickle.loads(detailed_metrics_pickle) if detailed_metrics_pickle else None
         
         # 執行多股票回測
         backtester = MultiStockBacktester(
@@ -71,7 +77,9 @@ def _evaluate_multi_stock_combination_worker_raw(
             trades=trades,
             stats=stats,
             equity_curve=equity_curve,
-            initial_capital=initial_capital
+            initial_capital=initial_capital,
+            basic_metrics=basic_metrics,
+            detailed_metrics=detailed_metrics
         )
         
         # 只收集原始指標值，不計算得分
@@ -106,7 +114,9 @@ class MultiStockFactorOptimizer:
                  show_progress: bool = True,
                  n_jobs: int = 1,
                  metric_weights: Optional[Dict[str, float]] = None,
-                 enable_full_rate_factor: bool = False):
+                 enable_full_rate_factor: bool = False,
+                 basic_metrics: Optional[List[Dict]] = None,
+                 detailed_metrics: Optional[List[Dict]] = None):
         """
         Parameters:
         -----------
@@ -126,18 +136,27 @@ class MultiStockFactorOptimizer:
         n_jobs : int
             並行處理的進程數，預設為 1（順序執行）
             -1 表示使用所有 CPU 核心
-        metric_weights : dict, optional
-            各績效指標的權重字典，例如：
-            {
-                '策略_總報酬率': 0.2,
-                '策略_Sharpe': 0.3,
-                '勝率': 0.15,
-                ...
-            }
-            如果為 None，則使用等權重
+        metric_weights : dict or list, optional
+            各績效指標的權重配置，可以是：
+            1. 指標類別列表（推薦）：例如 [
+                   {"class": TotalReturnMetric, "weight": 3},
+                   {"class": SharpeMetric, "weight": 2},
+                   {"class": WinRateMetric, "weight": 1},
+               ]
+               會從指標類別中取得 metric_name, higher_is_better 等屬性
+               並且會自動提取 basic_metrics 和 detailed_metrics
+            2. 權重字典：例如 {'策略_總報酬率': 0.2, '策略_Sharpe': 0.3, ...}
+               如果使用字典，則使用 PerformanceMetrics 的預設指標組合
+            如果為 None，則使用等權重和預設指標組合
             可用的指標請參考 scorer.AVAILABLE_METRICS
         enable_full_rate_factor : bool
             是否將策略收益放大為同全倉投入收益，利於與基準比較（預設 False）
+        basic_metrics : list, optional
+            基本指標列表（已廢棄，會從 metric_weights 自動提取）
+            格式：[{"class": TotalReturnMetric}, {"class": SharpeMetric}, ...]
+        detailed_metrics : list, optional
+            詳細指標列表（已廢棄，會從 metric_weights 自動提取）
+            格式：[{"class": BasicTradeStatsMetric}, {"class": WinRateMetric}, ...]
         """
         self.stock_data = stock_data
         self.parameter_space = parameter_space
@@ -145,8 +164,21 @@ class MultiStockFactorOptimizer:
         self.slippage_factors = slippage_factors or []
         self.position_manager = position_manager
         self.show_progress = show_progress
-        self.metric_weights = metric_weights
         self.enable_full_rate_factor = enable_full_rate_factor
+        
+        # 處理權重和指標：如果是指標類別列表，自動提取 basic_metrics 和 detailed_metrics
+        if metric_weights is not None and isinstance(metric_weights, list):
+            self.metric_weights = self._convert_metric_classes_to_weights(metric_weights)
+            # 自動從 metric_weights 中提取 basic_metrics 和 detailed_metrics
+            extracted_basic, extracted_detailed = self._extract_metrics_from_weights(metric_weights)
+            # 如果用戶有指定，優先使用用戶指定的（向後相容）
+            self.basic_metrics = basic_metrics if basic_metrics is not None else extracted_basic
+            self.detailed_metrics = detailed_metrics if detailed_metrics is not None else extracted_detailed
+        else:
+            # 使用字典或 None，則使用用戶指定的或預設值
+            self.metric_weights = metric_weights
+            self.basic_metrics = basic_metrics
+            self.detailed_metrics = detailed_metrics
         
         # 計算實際使用的進程數
         if n_jobs == -1:
@@ -270,6 +302,8 @@ class MultiStockFactorOptimizer:
         stock_data_pickle = pickle.dumps(self.stock_data)
         slippage_factors_pickle = pickle.dumps(self.slippage_factors)
         position_manager_pickle = pickle.dumps(self.position_manager) if self.position_manager else None
+        basic_metrics_pickle = pickle.dumps(self.basic_metrics) if self.basic_metrics else None
+        detailed_metrics_pickle = pickle.dumps(self.detailed_metrics) if self.detailed_metrics else None
         
         # 使用進程池並行執行
         with ProcessPoolExecutor(max_workers=self.n_jobs) as executor:
@@ -283,7 +317,9 @@ class MultiStockFactorOptimizer:
                     self.initial_capital,
                     slippage_factors_pickle,
                     position_manager_pickle,
-                    self.enable_full_rate_factor
+                    self.enable_full_rate_factor,
+                    basic_metrics_pickle,
+                    detailed_metrics_pickle
                 ): (i + 1, combo)
                 for i, combo in enumerate(combinations)
             }
@@ -331,7 +367,9 @@ class MultiStockFactorOptimizer:
             trades=trades,
             stats=stats,
             equity_curve=equity_curve,
-            initial_capital=self.initial_capital
+            initial_capital=self.initial_capital,
+            basic_metrics=self.basic_metrics,
+            detailed_metrics=self.detailed_metrics
         )
         
         # 只收集原始指標值，不計算得分
@@ -344,6 +382,77 @@ class MultiStockFactorOptimizer:
         }
         
         return result_record
+    
+    def _convert_metric_classes_to_weights(self, metric_weights_list: List[Dict]) -> Dict[str, float]:
+        """
+        將指標類別列表轉換為權重字典
+        
+        Parameters:
+        -----------
+        metric_weights_list : list
+            指標類別列表，格式：[{"class": TotalReturnMetric, "weight": 3}, ...]
+        
+        Returns:
+        --------
+        dict : 權重字典，例如 {'策略_總報酬率': 3, '策略_Sharpe': 2, ...}
+        """
+        weights = {}
+        
+        for item in metric_weights_list:
+            MetricClass = item["class"]
+            weight = item.get("weight", 1.0)
+            
+            # 實例化指標類別以取得屬性
+            metric_instance = MetricClass()
+            metric_name = metric_instance.metric_name
+            
+            # 注意：現在每個指標類別只返回一個 key，不再需要 key 參數
+            # 如果仍有 key 參數（向後相容），使用它
+            if "key" in item:
+                metric_name = item["key"]
+            
+            weights[metric_name] = weight
+        
+        return weights
+    
+    def _extract_metrics_from_weights(self, metric_weights_list: List[Dict]) -> tuple:
+        """
+        從指標類別權重列表中提取 basic_metrics 和 detailed_metrics
+        
+        Parameters:
+        -----------
+        metric_weights_list : list
+            指標類別列表，格式：[{"class": TotalReturnMetric, "weight": 3}, ...]
+        
+        Returns:
+        --------
+        tuple : (basic_metrics_list, detailed_metrics_list)
+        """
+        basic_metrics = []
+        detailed_metrics = []
+        
+        for item in metric_weights_list:
+            MetricClass = item["class"]
+            
+            # 判斷是 basic 還是 detailed 指標
+            if issubclass(MetricClass, BaseBasicMetric):
+                # 基本指標：只保留 class，移除 weight 和 key
+                basic_config = {"class": MetricClass}
+                # 保留其他參數（如果有）
+                for k, v in item.items():
+                    if k not in ["class", "weight"]:
+                        basic_config[k] = v
+                basic_metrics.append(basic_config)
+            elif issubclass(MetricClass, BaseDetailedMetric):
+                # 詳細指標：保留 class 和 key（如果有）
+                detailed_config = {"class": MetricClass}
+                # 保留 key 和其他參數
+                for k, v in item.items():
+                    if k not in ["class", "weight"]:
+                        detailed_config[k] = v
+                detailed_metrics.append(detailed_config)
+        
+        return basic_metrics, detailed_metrics
     
     def _calculate_statistical_scores(self, raw_results_df: pd.DataFrame) -> List[Dict]:
         """使用 Min-Max 縮放方法計算得分，並確保權重已歸一化"""

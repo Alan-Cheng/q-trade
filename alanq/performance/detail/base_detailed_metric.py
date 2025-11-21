@@ -20,6 +20,11 @@ class BaseDetailedMetric(ABC):
             指標參數
         """
         self.params = kwargs
+        # 指標屬性（子類別可以覆寫）
+        self.metric_name = getattr(self, 'metric_name', self.__class__.__name__)
+        self.higher_is_better = getattr(self, 'higher_is_better', True)
+        self.target = getattr(self, 'target', None)
+        self.description = getattr(self, 'description', '')
     
     @abstractmethod
     def calculate(self, trades: pd.DataFrame,

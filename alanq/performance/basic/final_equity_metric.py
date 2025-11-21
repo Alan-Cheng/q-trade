@@ -8,6 +8,9 @@ class FinalEquityMetric(BaseBasicMetric):
     最終權益指標
     計算公式：權益曲線的最後一個值
     """
+    higher_is_better = True
+    target = None  # 沒有固定目標值
+    description = '最終權益'
     
     def calculate(self, equity_curve: pd.Series, 
                   initial_capital: float,

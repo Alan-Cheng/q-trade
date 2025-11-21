@@ -8,6 +8,9 @@ class MaxDrawdownMetric(BaseBasicMetric):
     最大回撤指標
     計算公式：權益曲線相對累積最高點的最大跌幅
     """
+    higher_is_better = False  # 回撤越小越好
+    target = 0.0
+    description = '最大回撤'
     
     def calculate(self, equity_curve: pd.Series, 
                   initial_capital: float,

@@ -22,6 +22,10 @@ class BaseBasicMetric(ABC):
         """
         self.params = kwargs
         self.metric_name = self._get_metric_name()
+        # 指標屬性（子類別可以覆寫）
+        self.higher_is_better = getattr(self, 'higher_is_better', True)
+        self.target = getattr(self, 'target', None)
+        self.description = getattr(self, 'description', '')
     
     @abstractmethod
     def calculate(self, equity_curve: pd.Series, 

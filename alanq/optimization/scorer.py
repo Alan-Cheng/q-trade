@@ -1,5 +1,8 @@
 import numpy as np
-from typing import Dict, Optional
+from typing import Dict, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..performance.performance_metrics import PerformanceMetrics
 
 # 定義可用的績效指標列表（來自 PerformanceMetrics）
 AVAILABLE_METRICS = {

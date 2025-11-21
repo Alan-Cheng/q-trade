@@ -7,6 +7,10 @@ class WinRateMetric(BaseDetailedMetric):
     勝率指標
     計算公式：獲利交易次數 / 總交易次數
     """
+    metric_name = '勝率'
+    higher_is_better = True
+    target = 1.0
+    description = '勝率'
     
     def calculate(self, trades: pd.DataFrame,
                   existing_stats: Dict[str, float]) -> Dict[str, float]:

@@ -8,6 +8,9 @@ class SharpeMetric(BaseBasicMetric):
     Sharpe 比率指標
     計算公式：(日報酬率平均值 / 日報酬率標準差) * sqrt(252)
     """
+    higher_is_better = True
+    target = 2.0
+    description = 'Sharpe Ratio'
     
     def calculate(self, equity_curve: pd.Series, 
                   initial_capital: float,

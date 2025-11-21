@@ -8,6 +8,9 @@ class TotalReturnMetric(BaseBasicMetric):
     總報酬率指標
     計算公式：(最終權益 / 初始資金) - 1
     """
+    higher_is_better = True
+    target = 1.0
+    description = '總報酬率'
     
     def calculate(self, equity_curve: pd.Series, 
                   initial_capital: float,

@@ -8,6 +8,9 @@ class VolatilityMetric(BaseBasicMetric):
     年化波動率指標
     計算公式：日報酬率標準差 * sqrt(252)
     """
+    higher_is_better = False  # 波動率越小越好
+    target = 0.15
+    description = '年化波動率'
     
     def calculate(self, equity_curve: pd.Series, 
                   initial_capital: float,

@@ -8,6 +8,9 @@ class AnnualReturnMetric(BaseBasicMetric):
     年化報酬率指標
     計算公式：(1 + 總報酬率) ^ (1 / 年數) - 1
     """
+    higher_is_better = True
+    target = 0.2
+    description = '年化報酬率'
     
     def calculate(self, equity_curve: pd.Series, 
                   initial_capital: float,
