@@ -1,0 +1,25 @@
+digraph Tree {
+node [shape=box, style="filled, rounded", color="black", fontname="helvetica"] ;
+edge [fontname="helvetica"] ;
+0 [label=<feature_sign &le; 0.0<br/>gini = 0.5<br/>samples = 981<br/>value = [480, 501]<br/>class = Up>, fillcolor="#f7fbfe"] ;
+1 [label=<feature_date_week &le; 0.5<br/>gini = 0.158<br/>samples = 497<br/>value = [454, 43]<br/>class = Down>, fillcolor="#e78d4c"] ;
+0 -> 1 [labeldistance=2.5, labelangle=45, headlabel="True"] ;
+2 [label=<feature_volume_noise &le; -0.347<br/>gini = 0.479<br/>samples = 108<br/>value = [65, 43]<br/>class = Down>, fillcolor="#f6d4bc"] ;
+1 -> 2 ;
+3 [label=<gini = 0.486<br/>samples = 53<br/>value = [22, 31]<br/>class = Up>, fillcolor="#c6e3f7"] ;
+2 -> 3 ;
+4 [label=<gini = 0.341<br/>samples = 55<br/>value = [43, 12]<br/>class = Down>, fillcolor="#eca470"] ;
+2 -> 4 ;
+5 [label=<gini = 0.0<br/>samples = 389<br/>value = [389, 0]<br/>class = Down>, fillcolor="#e58139"] ;
+1 -> 5 ;
+6 [label=<feature_date_week &le; 3.5<br/>gini = 0.102<br/>samples = 484<br/>value = [26, 458]<br/>class = Up>, fillcolor="#44a3e6"] ;
+0 -> 6 [labeldistance=2.5, labelangle=-45, headlabel="False"] ;
+7 [label=<gini = 0.0<br/>samples = 397<br/>value = [0, 397]<br/>class = Up>, fillcolor="#399de5"] ;
+6 -> 7 ;
+8 [label=<feature_volume_Change &le; -0.63<br/>gini = 0.419<br/>samples = 87<br/>value = [26.0, 61.0]<br/>class = Up>, fillcolor="#8dc7f0"] ;
+6 -> 8 ;
+9 [label=<gini = 0.159<br/>samples = 23<br/>value = [2, 21]<br/>class = Up>, fillcolor="#4ca6e7"] ;
+8 -> 9 ;
+10 [label=<gini = 0.469<br/>samples = 64<br/>value = [24, 40]<br/>class = Up>, fillcolor="#b0d8f5"] ;
+8 -> 10 ;
+}
