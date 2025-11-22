@@ -25,11 +25,20 @@ class SlippageOpenGap(BaseSlippage):
 
         row = self.current_row
         
-        # 假設 preClose 是前一天的 Close 價 (通常需要 shift 取得)
-        # 如果 df 中沒有 preClose 欄位，這部分邏輯需要調整。
-        # 這裡我們假設 row["preClose"] 是正確的前收盤價。
+        # 自己計算前收盤價（前一天的 Close）
+        date = row.name
+        if date in self.df.index:
+            date_idx = self.df.index.get_loc(date)
+            if date_idx > 0:
+                pre_close = self.df.iloc[date_idx - 1]["Close"]
+            else:
+                # 如果是第一筆資料，無法取得前收盤價，使用當前收盤價
+                pre_close = row["Close"]
+        else:
+            # 如果日期不在索引中，使用當前收盤價
+            pre_close = row["Close"]
+        
         open_price = row["Open"]
-        pre_close = row.get("preClose")
         high = row["High"]
         low = row["Low"]
 

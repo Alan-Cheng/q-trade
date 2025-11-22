@@ -606,11 +606,6 @@ metrics.plot_trade_distribution()
 
 ---
 
-## 版本資訊
-
-- **版本**: 0.1.0
-- **Python**: 建議使用 Python 3.8+
-
 ## 依賴套件
 
 主要依賴套件：

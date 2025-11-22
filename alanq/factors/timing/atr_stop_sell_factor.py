@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import talib
 from .base_timing_factor import BaseSellFactor
 
 # =========================================================
@@ -7,24 +8,22 @@ from .base_timing_factor import BaseSellFactor
 # =========================================================
 class AtrStopSellFactor(BaseSellFactor):
 
+    def __init__(self, df, **kwargs):
+        super().__init__(df, **kwargs)
+        # 使用 TA-Lib 計算 ATR（此因子需要 atr14 和 atr21）
+        if "atr14" not in df.columns:
+            atr14_values = talib.ATR(df["High"].values, df["Low"].values, df["Close"].values, timeperiod=14)
+            df["atr14"] = pd.Series(atr14_values, index=df.index)
+        if "atr21" not in df.columns:
+            atr21_values = talib.ATR(df["High"].values, df["Low"].values, df["Close"].values, timeperiod=21)
+            df["atr21"] = pd.Series(atr21_values, index=df.index)
+
     def reset(self):
         self.in_position = False
         self.entry_price = None
 
-    # def _ensure_atr(self):
-    #     df = self.df
-    #     if "atr14" not in df or "atr21" not in df:
-    #         high_low = df["High"] - df["Low"]
-    #         high_close = (df["High"] - df["Close"].shift(1)).abs()
-    #         low_close = (df["Low"] - df["Close"].shift(1)).abs()
-    #         tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-
-    #         df["atr14"] = tr.rolling(14).mean().fillna(0)
-    #         df["atr21"] = tr.rolling(21).mean().fillna(0)
-
     def generate(self):
         df = self.df
-        # self._ensure_atr()
 
         n_loss = self.params.get("stop_loss_n")
         n_win = self.params.get("stop_win_n")

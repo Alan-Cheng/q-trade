@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import talib
 from .base_timing_factor import BaseSellFactor
 
 # =========================================================
@@ -11,25 +12,21 @@ class CloseAtrStopSellFactor(BaseSellFactor):
     close_atr_n：觸發止盈的 ATR 倍數（如 1.2）
     """
 
+    def __init__(self, df, **kwargs):
+        super().__init__(df, **kwargs)
+        # 使用 TA-Lib 計算 ATR（此因子需要 atr21）
+        if "atr21" not in df.columns:
+            atr21_values = talib.ATR(df["High"].values, df["Low"].values, df["Close"].values, timeperiod=21)
+            df["atr21"] = pd.Series(atr21_values, index=df.index)
+
     def reset(self):
         self.in_position = False
         self.entry_price = None
         self.max_close = None  # 持倉期間最高收盤價
 
-    # def _ensure_atr(self):
-    #     df = self.df
-    #     if "atr21" not in df:
-    #         high_low = df["High"] - df["Low"]
-    #         high_close = (df["High"] - df["Close"].shift(1)).abs()
-    #         low_close = (df["Low"] - df["Close"].shift(1)).abs()
-    #         tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-    #         df["atr21"] = tr.rolling(21).mean().fillna(0)
-
     def generate(self):
         df = self.df
         close_atr_n = self.params.get("close_atr_n", 1.2)
-
-        # self._ensure_atr()
 
         close = df["Close"].values
         atr21 = df["atr21"].values

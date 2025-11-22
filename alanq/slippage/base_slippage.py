@@ -18,8 +18,6 @@ class BaseSlippage(ABC):
         self.params = kwargs 
         # 產生唯一的 factor_name，用於在 Backtester 中儲存和識別
         action = kwargs.get('action', 'default')
-        # 假設滑價模型也像因子一樣需要 _ensure_atr
-        # self._ensure_atr() 
         self.factor_name = f"{self.__class__.__name__}_{action}_{kwargs}"
         
         # 每天迴圈中傳入的單行數據

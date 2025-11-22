@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import talib
 from .base_timing_factor import BaseSellFactor
 
 # =========================================================
@@ -12,35 +13,18 @@ class RiskStopSellFactor(BaseSellFactor):
     → 強制止損賣出
     """
 
+    def __init__(self, df, **kwargs):
+        super().__init__(df, **kwargs)
+        # 使用 TA-Lib 計算 ATR（此因子需要 atr21）
+        if "atr21" not in df.columns:
+            atr21_values = talib.ATR(df["High"].values, df["Low"].values, df["Close"].values, timeperiod=21)
+            df["atr21"] = pd.Series(atr21_values, index=df.index)
+
     def reset(self):
         pass
 
-    # -----------------------------------------------------
-    # 如果 df 沒有 ATR 相關欄位，補上
-    # -----------------------------------------------------
-    # def _ensure_atr(self):
-    #     df = self.df
-
-    #     if "atr14" not in df.columns or "atr21" not in df.columns:
-    #         high_low = df["High"] - df["Low"]
-    #         high_close = (df["High"] - df["Close"].shift(1)).abs()
-    #         low_close = (df["Low"] - df["Close"].shift(1)).abs()
-
-    #         tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-
-    #         df["atr14"] = tr.rolling(14).mean()
-    #         df["atr21"] = tr.rolling(21).mean()
-
-    #         df[["atr14", "atr21"]] = df[["atr14", "atr21"]].fillna(0)
-
-    # -----------------------------------------------------
-    # generate(): 回傳賣出訊號
-    # -----------------------------------------------------
     def generate(self):
         df = self.df
-
-        # 確保 ATR 欄位存在
-        # self._ensure_atr()
 
         pre_atr_n = self.params.get("pre_atr_n", 1.5)  # 預設 1.5（與阿布一致）
         signal = np.full(len(df), np.nan)
