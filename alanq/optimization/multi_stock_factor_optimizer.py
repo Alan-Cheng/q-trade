@@ -85,8 +85,8 @@ def _evaluate_multi_stock_combination_worker_raw(
         # 只收集原始指標值，不計算得分
         result_record = {
             '組合編號': combo_num,
-            '買入因子': str(combo['buy_factors']),
-            '賣出因子': str(combo['sell_factors']),
+            '買入因子': repr(combo['buy_factors']),
+            '賣出因子': repr(combo['sell_factors']),
             **stats,
             **metrics.detailed_stats
         }
@@ -375,8 +375,8 @@ class MultiStockFactorOptimizer:
         # 只收集原始指標值，不計算得分
         result_record = {
             '組合編號': combo_num,
-            '買入因子': str(combo['buy_factors']),
-            '賣出因子': str(combo['sell_factors']),
+            '買入因子': repr(combo['buy_factors']),
+            '賣出因子': repr(combo['sell_factors']),
             **stats,
             **metrics.detailed_stats
         }

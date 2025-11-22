@@ -63,8 +63,8 @@ def _evaluate_combination_worker_raw(combo_num: int, combo: Dict, df: pd.DataFra
         # 注意: 這裡保留 '組合編號' 方便 worker 識別，但在 _calculate_statistical_scores 中會被移除。
         result_record = {
             '組合編號': combo_num,
-            '買入因子': str(combo['buy_factors']),
-            '賣出因子': str(combo['sell_factors']),
+            '買入因子': repr(combo['buy_factors']),
+            '賣出因子': repr(combo['sell_factors']),
             **stats,
             **metrics.detailed_stats
         }
@@ -333,8 +333,8 @@ class FactorOptimizer:
         # 只收集原始指標值，不計算得分
         result_record = {
             '組合編號': combo_num,
-            '買入因子': str(combo['buy_factors']),
-            '賣出因子': str(combo['sell_factors']),
+            '買入因子': repr(combo['buy_factors']),
+            '賣出因子': repr(combo['sell_factors']),
             **stats,
             **metrics.detailed_stats
         }
