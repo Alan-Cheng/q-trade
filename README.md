@@ -85,6 +85,59 @@ alanq/
 
 ---
 
+## 系統架構與模組交互
+
+下圖展示了各模組之間的依賴關係和數據流向：
+
+```mermaid
+graph TD
+    A[data/StockDataManager] --> B[factors/selection<br/>選股因子]
+    A --> C[factors/timing<br/>時機因子]
+    
+    B --> D[backtest/selection_backtester<br/>選股回測器]
+    D --> E[選中的股票列表]
+    
+    E --> F[backtest/timing_backtester<br/>時機回測器]
+    C --> F
+    G[slippage/<br/>滑價模型] --> F
+    H[positions/<br/>倉位管理] --> F
+    
+    F --> I[optimization/<br/>因子優化器]
+    I --> F
+    
+    F --> J[performance/<br/>績效評估]
+    K[benchmark/<br/>基準計算] --> J
+    
+    style A fill:#e1f5ff
+    style D fill:#fff4e1
+    style F fill:#fff4e1
+    style I fill:#ffe1f5
+    style J fill:#e1ffe1
+```
+
+### 模組交互說明
+
+1. **資料層** (`data/`)
+   - `StockDataManager` 提供股票資料給所有需要資料的模組
+
+2. **因子層** (`factors/`)
+   - `selection/`: 選股因子，用於篩選股票
+   - `timing/`: 時機因子，用於判斷買賣時機
+
+3. **回測層** (`backtest/`)
+   - `selection_backtester`: 使用選股因子進行股票篩選，輸出選中的股票列表
+   - `timing_backtester`: 使用時機因子、滑價模型、倉位管理進行回測
+   - 接收 `selection_backtester` 輸出的選中股票列表
+
+4. **優化層** (`optimization/`)
+   - 因子優化器使用 `timing_backtester` 進行參數優化
+
+5. **評估層** (`performance/`, `benchmark/`)
+   - 績效評估模組分析回測結果
+   - 基準計算模組提供對比基準
+
+---
+
 ## 模組說明
 
 ### 1. data - 資料管理模組
