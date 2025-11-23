@@ -2,6 +2,68 @@
 
 AlanQ 是一個完整的量化交易回測框架，提供從資料管理、因子開發、回測執行到績效評估的完整功能。
 
+## 關於
+
+本專案參考 [阿布量化交易系統 (abu)](https://github.com/bbfamily/abu) 的教學書籍與開源框架，實作並學習量化交易相關概念與建立回測系統。
+
+## 安裝
+
+### 前置需求
+
+- Python 3.8 或更高版本
+
+### 安裝步驟
+
+1. **Clone或下載專案**
+
+```bash
+git clone <repository-url>
+cd q-trade
+```
+
+2. **建立虛擬環境（建議）**
+
+```bash
+python -m venv venv
+```
+
+3. **啟動虛擬環境**
+
+- macOS/Linux:
+```bash
+source venv/bin/activate
+```
+
+- Windows:
+```bash
+venv\Scripts\activate
+```
+
+4. **安裝依賴套件**
+
+```bash
+pip install -r requirements.txt
+```
+
+### 依賴套件清單
+
+專案所需的套件已列於 `requirements.txt`，包含：
+
+- `pandas`: 資料處理
+- `numpy`: 數值計算
+- `matplotlib`: 圖表繪製
+- `mplfinance`: 金融圖表繪製
+- `yfinance`: 股票資料下載
+- `scipy`: 科學計算
+- `bokeh`: 互動式視覺化
+- `seaborn`: 統計圖表
+- `jupyter`: Jupyter Notebook 環境
+- `ipykernel`: Jupyter 核心
+- `ta-lib`: 技術分析指標庫
+- `statsmodels`: 統計分析（用於回歸工具）
+- `scikit-learn`: 機器學習工具
+- `requests`: HTTP 請求庫
+
 ## 目錄結構
 
 ```
@@ -58,6 +120,9 @@ alanq/
 
 **功能**: 判斷股票是否符合選股條件
 
+**範例**:使用股價趨勢角度選股因子： 
+![選股因子角度示意圖](https://github.com/Alan-Cheng/q-trade/blob/master/data/img/CH8.2_selection_angle.png?raw=true)
+
 **基類**: `StockPickerBase`
 
 **輸入**:
@@ -73,6 +138,7 @@ alanq/
 #### 2.2 timing - 時機因子
 
 **功能**: 產生買入或賣出訊號
+![時機因子示意圖](https://github.com/Alan-Cheng/q-trade/blob/master/data/img/CH8.1_timing.png?raw=true)
 
 **基類**:
 - `BaseBuyFactor`: 買入因子基類
@@ -318,6 +384,8 @@ alanq/
 ### 7. optimization - 因子優化模組
 
 **功能**: 自動化測試不同因子組合，找出最佳參數配置
+
+![參數優化示意圖](https://github.com/Alan-Cheng/q-trade/blob/master/data/img/CH9_param_opt.png?raw=true)
 
 #### 7.1 factor_optimizer.py
 
@@ -603,6 +671,14 @@ metrics.plot_equity_curve()
 metrics.plot_drawdown()
 metrics.plot_trade_distribution()
 ```
+
+### 機器學習應用
+
+本專案也包含機器學習相關的應用範例，詳見 `notebooks/CH10-監督與非監督機器學習.ipynb`。
+
+![機器學習分類示意圖](https://github.com/Alan-Cheng/q-trade/blob/master/data/img/CH10_classification.png?raw=true)
+
+![決策樹示意圖](https://github.com/Alan-Cheng/q-trade/blob/master/data/img/CH10_decision_tree.png?raw=true)
 
 ---
 

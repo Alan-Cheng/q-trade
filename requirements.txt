@@ -10,3 +10,5 @@ jupyter
 ipykernel
 ta-lib
 statsmodels
+scikit-learn
+requests
