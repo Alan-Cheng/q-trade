@@ -48,6 +48,13 @@ class StockPickerWorker:
                 
                 result_row[factor_name] = factor_passed
                 
+                # 記錄因子的計算值（如果因子有儲存計算值）
+                factor_value_name = f"{factor_name}_值"
+                if hasattr(picker, 'last_calculated_value'):
+                    result_row[factor_value_name] = picker.last_calculated_value
+                else:
+                    result_row[factor_value_name] = None
+                
                 if not factor_passed:
                     is_picked_overall = False
             

@@ -24,6 +24,7 @@ class RegressAnglePicker(StockPickerBase):
     @reversed_result
     def fit_pick(self, kl_pd, target_symbol):
         if kl_pd.empty:
+            self.last_calculated_value = None
             return False
             
         # ... (close_data 獲取邏輯不變)
@@ -33,6 +34,7 @@ class RegressAnglePicker(StockPickerBase):
             try:
                 close_data = kl_pd['close']
             except KeyError:
+                self.last_calculated_value = None
                 return False 
             
         ang = RegressionUtil.calc_regress_deg(
@@ -40,6 +42,9 @@ class RegressAnglePicker(StockPickerBase):
             symbol=target_symbol,
             show=self.show_plot
         )
+        
+        # 儲存計算出的角度值，供外部讀取
+        self.last_calculated_value = ang
         
         # 根據參數進行角度條件判斷
         return self.threshold_ang_min < ang < self.threshold_ang_max
