@@ -239,3 +239,57 @@ class StockDataManager:
     
     def get_stock_data_by_symbols(self, symbols: list[str]) -> dict[str, pd.DataFrame]:
         return {symbol: self.stock_data.get(symbol, pd.DataFrame()) for symbol in symbols}
+    
+    def subset(self, start_date: str, end_date: str) -> 'StockDataManager':
+        """
+        根據指定的開始和結束日期，切出資料的子集，返回一個新的 StockDataManager 實例。
+        
+        參數:
+            start_date (str): 子集的開始日期，格式為 'YYYY-MM-DD' 或 'YYYYMMDD'。
+            end_date (str): 子集的結束日期，格式為 'YYYY-MM-DD' 或 'YYYYMMDD'。
+        
+        回傳:
+            StockDataManager: 包含切出資料的新實例。
+        
+        範例:
+            # 從 20231201 到 20241231 的資料中，切出 20240101 到 20241231
+            manager = StockDataManager(country_code='TW', start_date='2023-12-01', end_date='2024-12-31')
+            subset_manager = manager.subset('2024-01-01', '2024-12-31')
+        """
+        # 轉換日期格式（支援 'YYYY-MM-DD' 和 'YYYYMMDD'）
+        def normalize_date(date_str):
+            if len(date_str) == 8 and date_str.isdigit():
+                # YYYYMMDD 格式
+                return f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
+            return date_str
+        
+        start_date = normalize_date(start_date)
+        end_date = normalize_date(end_date)
+        
+        # 創建新的實例（不調用 __init__ 的下載邏輯）
+        new_manager = StockDataManager.__new__(StockDataManager)
+        new_manager.start_date = start_date
+        new_manager.end_date = end_date
+        new_manager.all_symbols = self.all_symbols.copy()
+        new_manager.stock_data = {}
+        
+        # 對每個股票的資料進行日期篩選
+        for symbol, df in self.stock_data.items():
+            if df.empty:
+                continue
+            
+            # 確保索引是 DatetimeIndex
+            if not isinstance(df.index, pd.DatetimeIndex):
+                try:
+                    df.index = pd.to_datetime(df.index)
+                except:
+                    continue
+            
+            # 篩選日期範圍
+            mask = (df.index >= start_date) & (df.index <= end_date)
+            subset_df = df[mask].copy()
+            
+            if not subset_df.empty:
+                new_manager.stock_data[symbol] = subset_df
+        
+        return new_manager

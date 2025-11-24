@@ -24,8 +24,20 @@ class RegressionUtil:
         # --- 1. X 與 Y 同時標準化（0~1 區間） ---
         x_raw = np.arange(n)
 
-        x_norm = (x_raw - x_raw.min()) / (x_raw.max() - x_raw.min())
-        y_norm = (y_arr - y_arr.min()) / (y_arr.max() - y_arr.min())
+        # 檢查是否所有值都相同（避免除以零）
+        x_range = x_raw.max() - x_raw.min()
+        y_range = y_arr.max() - y_arr.min()
+        
+        if x_range == 0:
+            x_norm = np.zeros_like(x_raw)
+        else:
+            x_norm = (x_raw - x_raw.min()) / x_range
+            
+        if y_range == 0:
+            # 如果所有價格都相同，角度為 0（無趨勢）
+            y_norm = np.zeros_like(y_arr)
+        else:
+            y_norm = (y_arr - y_arr.min()) / y_range
 
         # --- 2. OLS 回歸 ---
         X = sm.add_constant(x_norm)
