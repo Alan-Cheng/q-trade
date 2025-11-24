@@ -5,9 +5,11 @@
 
 from .base_selection_factor import StockPickerBase
 from .regress_angle_factor import RegressAnglePicker
+from .rps_factor import RPSPicker
 
 __all__ = [
     'StockPickerBase',
     'RegressAnglePicker',
+    'RPSPicker',
 ]
 

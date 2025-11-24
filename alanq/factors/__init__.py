@@ -16,6 +16,7 @@ from .timing import (
 from .selection import (
     StockPickerBase,
     RegressAnglePicker,
+    RPSPicker,
 )
 
 __all__ = [
@@ -30,5 +31,6 @@ __all__ = [
     # 選股因子
     'StockPickerBase',
     'RegressAnglePicker',
+    'RPSPicker',
 ]
 
