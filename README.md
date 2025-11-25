@@ -17,7 +17,7 @@ AlanQ 是一個自行建立的量化交易回測框架，提供從資料管理�
 1. **Clone或下載專案**
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Alan-Cheng/q-trade.git
 cd q-trade
 ```
 
